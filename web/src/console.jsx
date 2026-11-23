@@ -8,13 +8,18 @@ import ResultAccess from './result-access.jsx';
 import QuarantineAdmin,{QuarantinePolicy} from './quarantine-settings.jsx';
 import {defaultQuarantine,policyForQuestions} from './quarantine-policy.js';
 import {clock,verdict} from './inspection-view.js';
+import Select from './select.jsx';
 import './inspection.css';
 
 const clone=value=>structuredClone(value);
-const effortOptions=['none','minimal','low','medium','high','xhigh','max'];
+const effortOptions=['none','minimal','low','medium','high','xhigh','max'].map(value=>({value,label:value}));
+const attemptOptions=Array.from({length:10},(_,index)=>({value:index+1,label:`${index+1} 个`}));
+const roundOptions=[1,2,3].map(value=>({value,label:`${value} 次`}));
 const daytime={enabled:true,timezone:'Asia/Shanghai',regular_minutes:60,quiet_start:'22:00',quiet_end:'09:00',quiet_minutes:60,quiet_pause:true};
 function Field({label,children}){return <label className="ir-field"><span>{label}</span>{children}</label>;}
-function Effort({value,onChange}){return <select value={value} onChange={e=>onChange(e.target.value)}>{effortOptions.map(v=><option key={v}>{v}</option>)}</select>;}
+function SelectField({label,...props}){
+  return <div className="ir-field"><span>{label}</span><Select label={label} {...props}/></div>;
+}
 
 function KeyCheck(){
   const [keys,setKeys]=useState([]),[questions,setQuestions]=useState([]),[jobs,setJobs]=useState([]),[models,setModels]=useState([]),[keyId,setKeyId]=useState(''),[model,setModel]=useState(''),[effort,setEffort]=useState('high'),[topic,setTopic]=useState('drawing'),[shared,setShared]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[jobId,setJobId]=useState('');
@@ -24,7 +29,34 @@ function KeyCheck(){
   const selected=jobs.find(job=>job.id===jobId)||jobs[0];
   async function run(){setBusy(true);setError('');try{const job=await request('/api/user/jobs','POST',{api_key_id:Number(keyId),model,effort,kinds:[topic],public:shared,share_content:shared},'user');setJobId(job.id);await load();}catch(e){setError(e.message);}finally{setBusy(false);}}
   if(!hostSession())return <div className="ir-empty">请从 code1024 登录后进入此页面，选择自己的 API Key 检测。</div>;
-  return <><section className="ir-panel"><h2>使用自己的 Key 检测</h2><p>通过 code1024 正常调用，遵循所选 Key 的分组、模型权限和计费规则。</p>{error&&<p className="ir-error" role="alert">{error}</p>}<div className="ir-form-grid"><Field label="我的 API Key"><select value={keyId} onChange={e=>setKeyId(e.target.value)}><option value="">请选择 Key</option>{keys.map(k=><option key={k.id} value={k.id}>{k.name} · {k.masked} · {k.group_name}</option>)}</select></Field><Field label="检测题目"><select value={topic} onChange={e=>setTopic(e.target.value)}>{questions.map(q=><option key={q.id} value={q.id}>{q.title}</option>)}</select></Field><Field label="模型"><input list="key-models" value={model} onChange={e=>setModel(e.target.value)} placeholder="选择或输入此 Key 可用的模型"/><datalist id="key-models">{models.map(m=><option key={m.id} value={m.id}/>)}</datalist></Field><Field label="思考强度"><Effort value={effort} onChange={setEffort}/></Field></div><label className="ir-check"><input type="checkbox" checked={shared} onChange={e=>setShared(e.target.checked)}/>公开回答和作品到 Key 所属分组</label><div className="ir-actions"><button className="ir-primary" disabled={busy||!keyId||!model||!questions.some(q=>q.id===topic)} onClick={run}>{busy?'正在提交…':'开始 Key 检测'}</button><span>回答默认仅自己可见。</span></div></section><section className="ir-panel"><div className="ir-section-head"><h2>我的检测记录</h2><select aria-label="选择我的记录" value={selected?.id||''} onChange={e=>setJobId(e.target.value)}>{jobs.map(job=><option key={job.id} value={job.id}>{clock(job.created_at)} · {job.model} · {verdict(job)}</option>)}</select></div>{selected?<><p>{selected.model} · {selected.key_name} · {verdict(selected)}{selected.message?' · '+selected.message:''}</p><label className="ir-check"><input type="checkbox" checked={Boolean(selected.public)} onChange={async e=>{try{await request('/api/user/jobs/'+selected.id+'/publication','PUT',{public:e.target.checked,share_content:e.target.checked},'user');await load();}catch(error){setError(error.message);}}}/>公开到 {selected.group_name||'所属分组'}</label>{selected.results.map(row=><section key={row.kind} className="ir-own-result"><h3>{row.title}</h3><SelfResult job={selected} row={row}/></section>)}</>:<div className="ir-empty">还没有检测记录。</div>}</section></>;
+  return <>
+    <section className="ir-panel">
+      <h2>使用自己的 Key 检测</h2>
+      <p>通过 code1024 正常调用，遵循所选 Key 的分组、模型权限和计费规则。</p>
+      {error&&<p className="ir-error" role="alert">{error}</p>}
+      <div className="ir-form-grid">
+        <SelectField label="我的 API Key" value={keyId} onChange={setKeyId}
+          options={[{value:'',label:'请选择 Key'},...keys.map(item=>({
+            value:String(item.id),label:`${item.name} · ${item.masked} · ${item.group_name}`
+          }))]}/>
+        <SelectField label="检测题目" value={topic} onChange={setTopic}
+          options={questions.map(question=>({value:question.id,label:question.title}))}/>
+        <SelectField label="模型" value={model} onChange={setModel} editable
+          placeholder="选择或输入此 Key 可用的模型" options={models.map(item=>({value:item.id,label:item.id}))}/>
+        <SelectField label="思考强度" value={effort} onChange={setEffort} options={effortOptions}/>
+      </div>
+      <label className="ir-check"><input type="checkbox" checked={shared} onChange={e=>setShared(e.target.checked)}/>公开回答和作品到 Key 所属分组</label>
+      <div className="ir-actions"><button className="ir-primary" disabled={busy||!keyId||!model||!questions.some(q=>q.id===topic)} onClick={run}>{busy?'正在提交…':'开始 Key 检测'}</button><span>回答默认仅自己可见。</span></div>
+    </section>
+    <section className="ir-panel">
+      <div className="ir-section-head">
+        <h2>我的检测记录</h2>
+        <Select label="选择我的记录" className="quality-select-record" value={selected?.id||''} onChange={setJobId}
+          options={jobs.map(job=>({value:job.id,label:`${clock(job.created_at)} · ${job.model} · ${verdict(job)}`}))}/>
+      </div>
+      {selected?<><p>{selected.model} · {selected.key_name} · {verdict(selected)}{selected.message?' · '+selected.message:''}</p><label className="ir-check"><input type="checkbox" checked={Boolean(selected.public)} onChange={async e=>{try{await request('/api/user/jobs/'+selected.id+'/publication','PUT',{public:e.target.checked,share_content:e.target.checked},'user');await load();}catch(error){setError(error.message);}}}/>公开到 {selected.group_name||'所属分组'}</label>{selected.results.map(row=><section key={row.kind} className="ir-own-result"><h3>{row.title}</h3><SelfResult job={selected} row={row}/></section>)}</>:<div className="ir-empty">还没有检测记录。</div>}
+    </section>
+  </>;
 }
 function SelfResult({job,row}){
   const [links,setLinks]=useState([]),[error,setError]=useState('');
@@ -51,6 +83,10 @@ function AdminSettings({onChange}){
   },[activeJobs]);
   const record=data?.inspections.find(p=>p.id===selected);
   const availableGroups=data?.groups.filter(group=>!data.inspections.some(plan=>plan.group_id===group.id&&plan.id!==selected))||[];
+  const groupOptions=availableGroups.map(group=>({value:group.id,label:group.name}));
+  if (record&&!availableGroups.some(group=>group.id===record.group_id)) {
+    groupOptions.unshift({value:record.group_id,label:record.group_name||`分组 #${record.group_id}`});
+  }
   const selectedGroupReady=availableGroups.some(group=>group.id===draft?.group_id);
   useEffect(()=>{
     if(!data)return;
@@ -90,26 +126,23 @@ function AdminSettings({onChange}){
         <button onClick={()=>act(async()=>{await request('/api/admin/inventory/sync','POST',{});await load();},'分组已同步。')}><RefreshCw size={15} aria-hidden="true"/>同步分组</button>
       </div>
       <div className="ir-form-grid">
-        <Field label="检测分组"><select value={draft.group_id} onChange={e=>set('group_id',Number(e.target.value))}>
-          <option value={0} disabled>{availableGroups.length?'请选择检测分组':'暂无可新建的分组'}</option>
-          {record&&!availableGroups.some(group=>group.id===record.group_id)&&<option value={record.group_id}>{record.group_name||`分组 #${record.group_id}`}</option>}
-          {availableGroups.map(group=><option key={group.id} value={group.id}>{group.name}</option>)}
-        </select></Field>
+        <SelectField label="检测分组" value={draft.group_id} options={groupOptions} disabled={busy||!groupOptions.length}
+          placeholder={availableGroups.length?'请选择检测分组':'暂无可新建的分组'} onChange={value=>set('group_id',value)}/>
         <Field label="检测模型"><input value={draft.model} onChange={e=>set('model',e.target.value)}/></Field>
-        <Field label="思考强度"><Effort value={draft.effort} onChange={v=>set('effort',v)}/></Field>
+        <SelectField label="思考强度" value={draft.effort} options={effortOptions} disabled={busy} onChange={value=>set('effort',value)}/>
         <Field label="最多保留巡检轮次"><input type="number" min="1" max="200" step="1" value={draft.max_saved_rounds} placeholder="留空，仅按时间保留" onChange={e=>set('max_saved_rounds',e.target.value)}/></Field>
       </div>
       <p className="ir-note">同一轮的多题一起保留。设定上限后，超过上限的旧结果和作品会清理。</p>
-      <Field label="每轮最多尝试账号数"><select value={draft.max_account_attempts} onChange={e=>set('max_account_attempts',Number(e.target.value))}>
-        {Array.from({length:10},(_,i)=><option key={i+1} value={i+1}>{i+1} 个</option>)}
-      </select></Field>
+      <SelectField label="每轮最多尝试账号数" value={draft.max_account_attempts} options={attemptOptions} disabled={busy}
+        onChange={value=>set('max_account_attempts',value)}/>
       <p className="ir-note">首次尝试和限额跳过都计入上限。没有最近使用记录时，从优先级数值最小的可调度账号开始。</p>
       <div className="ir-own-result"><h3>检测题目（可多选）</h3><p className="ir-note">同一账号依次检测所有选中题目。每题可单独配置内容、标准答案和请求次数；糖果测试默认只请求一次。</p>
         <div className="ir-actions">{data.questions.value.filter(q=>q.enabled).map(q=><label className="ir-check" key={q.id}><input type="checkbox" checked={draft.question_ids.includes(q.id)} disabled={draft.question_ids.length===1&&draft.question_ids[0]===q.id} onChange={e=>toggleQuestion(q.id,e.target.checked)}/>{q.title}</label>)}</div>
         {draft.questions.map(q=><details key={q.id} open><summary>{q.title} · {q.rounds} 次请求</summary>
           <Field label="题目内容（仅影响此分组的新检测）"><textarea rows="4" value={q.prompt} onChange={e=>editQuestion(q.id,'prompt',e.target.value)}/></Field>
           {['number','choice','json'].includes(q.kind)&&<Field label="标准答案"><textarea rows="2" value={typeof q.expected==='object'?JSON.stringify(q.expected):q.expected} onChange={e=>editQuestion(q.id,'expected',e.target.value)}/></Field>}
-          <Field label="此题每轮请求次数"><select value={q.rounds} onChange={e=>editQuestion(q.id,'rounds',Number(e.target.value))}>{[1,2,3].map(n=><option key={n} value={n}>{n} 次</option>)}</select></Field>
+          <SelectField label="此题每轮请求次数" value={q.rounds} options={roundOptions} disabled={busy}
+            onChange={value=>editQuestion(q.id,'rounds',value)}/>
         </details>)}
       </div>
       <div className="ir-form-grid"><Field label="白天间隔（分钟）"><input type="number" min="5" max="1440" value={draft.schedule.regular_minutes} onChange={e=>set('schedule',{...draft.schedule,regular_minutes:Number(e.target.value)})}/></Field><Field label="暂停时段开始（北京时间）"><input type="time" value={draft.schedule.quiet_start} onChange={e=>set('schedule',{...draft.schedule,quiet_start:e.target.value})}/></Field><Field label="恢复检测（北京时间）"><input type="time" value={draft.schedule.quiet_end} onChange={e=>set('schedule',{...draft.schedule,quiet_end:e.target.value})}/></Field></div>

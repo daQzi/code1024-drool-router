@@ -3,6 +3,13 @@ import {ChevronDown,Code2,Copy,Expand,Info,Pause,Play,X} from 'lucide-react';
 import {request} from './console-client.js';
 import {endpoint} from './endpoints.js';
 import {batches,clock,isDrawing,selectedRecord,sourceName,verdict} from './inspection-view.js';
+import Select from './select.jsx';
+
+const sourceOptions=[
+  {value:'',label:'全部来源'},
+  {value:'admin',label:'定时巡检'},
+  {value:'user',label:'用户 Key 检测'}
+];
 
 function ArtworkFrame({url}) {
   const stage=useRef(null);
@@ -63,7 +70,16 @@ export default function ResultViewer({group,stamp,admin=false,groupControls,hist
   },[current?.id]);
   useEffect(()=>{let alive=true;async function load(){if(!current)return;try{const value=await request(`/api/${admin?'admin':'public'}/records/${current.id}`);if(alive){setDetail(value);setError('');}}catch(e){if(alive){setDetail(null);setError(e.message);}}}setDetail(null);load();const timer=setInterval(load,300000);return()=>{alive=false;clearInterval(timer);};},[current?.id,admin]);
   const topics=[...new Map(rows.map(row=>[row.kind,row.title||row.kind])).entries()];
-  return <section className="ir-viewer" aria-label={group.name+'检测结果'}><header className="ir-viewer-head">{groupControls}<div className="ir-filters"><select aria-label="题目筛选" value={topic} onChange={e=>setTopic(e.target.value)}><option value="">全部题目</option>{topics.map(([id,title])=><option key={id} value={id}>{title}</option>)}</select><select aria-label="来源筛选" value={source} onChange={e=>setSource(e.target.value)}><option value="">全部来源</option><option value="admin">定时巡检</option><option value="user">用户 Key 检测</option></select><details className="ir-results-info"><summary aria-label="结果展示说明"><Info size={17}/></summary><p>保留 {historyHours} 小时内的结果，每 30 秒刷新。作品供人工比较；请求失败与答案错误分别记录。巡检账号仅管理员可见。</p></details></div></header>
+  return <section className="ir-viewer" aria-label={group.name+'检测结果'}>
+    <header className="ir-viewer-head">
+      {groupControls}
+      <div className="ir-filters">
+        <Select label="题目筛选" className="quality-select-compact" value={topic} onChange={setTopic}
+          options={[{value:'',label:'全部题目'},...topics.map(([value,label])=>({value,label}))]}/>
+        <Select label="来源筛选" className="quality-select-compact" value={source} onChange={setSource} options={sourceOptions}/>
+        <details className="ir-results-info"><summary aria-label="结果展示说明"><Info size={17}/></summary><p>保留 {historyHours} 小时内的结果，每 30 秒刷新。作品供人工比较；请求失败与答案错误分别记录。巡检账号仅管理员可见。</p></details>
+      </div>
+    </header>
     {error&&<p className="ir-error" role="alert">{error}</p>}
     {loading?<div className="ir-empty">正在加载检测记录…</div>:!rounds.length?<div className="ir-empty">{rows.length?'此筛选下没有记录。':'还没有检测结果，完成巡检后会在这里展示。'}</div>:<div className="ir-reader">
       <aside className="ir-timeline" aria-label="检测记录">
@@ -80,7 +96,8 @@ export default function ResultViewer({group,stamp,admin=false,groupControls,hist
           <div className="ir-result-title">{models.length===1?<strong className="ir-model-name">{activeModel}</strong>:<div className="ir-models" aria-label="检测模型">{models.map(value=><button key={value} aria-pressed={activeModel===value} className={activeModel===value?'active':''} onClick={()=>{setModel(value);setRecordId('');}}>{value}</button>)}</div>}<h2>{current?.title}</h2><span>{sourceName(current?.source)}</span></div>
           {current&&<span className={'ir-status '+current.status}>{verdict(current)}</span>}
         </div>
-        {samples.length>1&&<select aria-label="选择检测结果" value={current?.id||''} onChange={e=>setRecordId(e.target.value)}>{samples.map((row,index)=><option key={row.id} value={row.id}>{row.title} · 样本 {index+1}</option>)}</select>}
+        {samples.length>1&&<Select label="选择检测结果" className="quality-select-record" value={current?.id||''} onChange={setRecordId}
+          options={samples.map((row,index)=>({value:row.id,label:`${row.title} · 样本 ${index+1}`}))}/>}
         {current&&<>
           {admin&&current.account_id&&<div className="ir-origin"><strong>检测账号 #{current.account_id} {current.account_name}</strong></div>}
           {current.hidden_from_results&&<p className="ir-note">该账号本轮有明确答错，仅管理员可见，结果页已隐藏。</p>}
