@@ -1,5 +1,5 @@
-import React,{useEffect,useState} from 'react';
-import {Activity,ArrowLeft,Plus,RefreshCw,Settings2} from 'lucide-react';
+import React,{useEffect,useImperativeHandle,useRef,useState} from 'react';
+import {Activity,ArrowLeft,Check,Plus,RefreshCw,Settings2} from 'lucide-react';
 import {hostSession} from './access.js';
 import {request,loadSelfData} from './console-client.js';
 import {ThemeSwitch} from './workspace.jsx';
@@ -21,10 +21,40 @@ function SelectField({label,...props}){
   return <div className="ir-field"><span>{label}</span><Select label={label} {...props}/></div>;
 }
 
-function KeyCheck(){
+function KeyCheck({refreshRef}){
   const [keys,setKeys]=useState([]),[questions,setQuestions]=useState([]),[jobs,setJobs]=useState([]),[models,setModels]=useState([]),[keyId,setKeyId]=useState(''),[model,setModel]=useState(''),[effort,setEffort]=useState('high'),[topic,setTopic]=useState('drawing'),[shared,setShared]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[jobId,setJobId]=useState('');
-  async function load(){if(!hostSession())return;const data=await loadSelfData();if(data.keys.status==='fulfilled'){const rows=data.keys.value.keys.filter(k=>k.status==='active');setKeys(rows);setKeyId(old=>rows.some(k=>String(k.id)===old)?old:rows[0]?String(rows[0].id):'');}if(data.questions.status==='fulfilled')setQuestions(data.questions.value.questions);if(data.jobs.status==='fulfilled')setJobs(data.jobs.value.jobs);const errors=Object.values(data).filter(v=>v.status==='rejected');if(errors.length)setError([...new Set(errors.map(v=>v.reason.message))].join('；'));}
-  useEffect(()=>{if(!hostSession())return;load().catch(e=>setError(e.message));const timer=setInterval(()=>request('/api/user/jobs','GET',undefined,'user').then(v=>setJobs(v.jobs)).catch(e=>setError(e.message)),5000);return()=>clearInterval(timer);},[]);
+  const jobsRequest=useRef(0);
+  const pendingJobs=useRef(null);
+  async function load(){
+    if(!hostSession())return;
+    const revision=++jobsRequest.current;
+    const data=await loadSelfData();
+    if(data.keys.status==='fulfilled'){
+      const rows=data.keys.value.keys.filter(key=>key.status==='active');
+      setKeys(rows);
+      setKeyId(old=>rows.some(key=>String(key.id)===old)?old:rows[0]?String(rows[0].id):'');
+    }
+    if(data.questions.status==='fulfilled')setQuestions(data.questions.value.questions);
+    if(revision===jobsRequest.current&&data.jobs.status==='fulfilled')setJobs(data.jobs.value.jobs);
+    const results=[data.keys,data.questions,...(revision===jobsRequest.current?[data.jobs]:[])];
+    const errors=results.filter(result=>result.status==='rejected');
+    if(errors.length)setError([...new Set(errors.map(result=>result.reason.message))].join('；'));
+  }
+  function refreshJobs(){
+    if(pendingJobs.current)return pendingJobs.current;
+    const revision=++jobsRequest.current;
+    pendingJobs.current=request('/api/user/jobs').then(value=>{
+      if(revision===jobsRequest.current)setJobs(value.jobs);
+    }).finally(()=>{pendingJobs.current=null;});
+    return pendingJobs.current;
+  }
+  useImperativeHandle(refreshRef,()=>({refresh:refreshJobs}));
+  useEffect(()=>{
+    if(!hostSession())return;
+    load().catch(error=>setError(error.message));
+    const timer=setInterval(()=>refreshJobs().catch(error=>setError(error.message)),5000);
+    return()=>clearInterval(timer);
+  },[]);
   useEffect(()=>{let alive=true;setModels([]);setModel('');if(keyId)request('/api/user/keys/'+keyId+'/models','GET',undefined,'user').then(v=>{if(alive){setModels(v.models);setModel(v.models[0]?.id||'');}}).catch(e=>{if(alive)setError(e.message);});return()=>{alive=false;};},[keyId]);
   const selected=jobs.find(job=>job.id===jobId)||jobs[0];
   async function run(){setBusy(true);setError('');try{const job=await request('/api/user/jobs','POST',{api_key_id:Number(keyId),model,effort,kinds:[topic],public:shared,share_content:shared},'user');setJobId(job.id);await load();}catch(e){setError(e.message);}finally{setBusy(false);}}
@@ -163,20 +193,56 @@ function AdminSettings({onChange}){
 
 export default function ConsoleApp(){
   const [data,setData]=useState(null),[admin,setAdmin]=useState(false),[adminChecked,setAdminChecked]=useState(!hostSession()),[tab,setTab]=useState('scheduled'),[settings,setSettings]=useState(()=>new URLSearchParams(location.search).get('view')==='admin'),[groupId,setGroupId]=useState(''),[error,setError]=useState('');
-  async function load(){try{setData(await request('/api/public/overview'));setError('');}catch(e){setData(null);setError(e.message);throw e;}}
+  const [refreshStatus,setRefreshStatus]=useState('');
+  const [refreshError,setRefreshError]=useState('');
+  const overviewRequest=useRef(null),scheduledViewer=useRef(null),keyViewer=useRef(null);
+  function load(){
+    if(overviewRequest.current)return overviewRequest.current;
+    overviewRequest.current=request('/api/public/overview').then(value=>{
+      setData(value);
+      setError('');
+    }).catch(error=>{
+      if(error.status===401||error.status===403)setData(null);
+      setError(error.message);
+      throw error;
+    }).finally(()=>{overviewRequest.current=null;});
+    return overviewRequest.current;
+  }
+  async function refresh(){
+    setRefreshStatus('refreshing');
+    setRefreshError('');
+    const requests=tab==='key'?[keyViewer.current?.refresh()]:[load(),...(scheduledViewer.current?.requests()??[])];
+    const results=await Promise.allSettled(requests);
+    const failed=results.find(result=>result.status==='rejected');
+    if(failed)setRefreshError('刷新失败：'+failed.reason.message);
+    setRefreshStatus(failed?'':'done');
+  }
   function openSettings(){setSettings(true);setError('');history.replaceState(null,'','?view=admin');}
-  function closeSettings(){setSettings(false);history.replaceState(null,'',location.pathname);load().catch(e=>setError(e.message));}
-  useEffect(()=>{if(!settings)load().catch(e=>setError(e.message));if(hostSession()){setAdminChecked(false);request('/api/admin/me').then(()=>setAdmin(true)).catch(()=>setAdmin(false)).finally(()=>setAdminChecked(true));}const timer=settings?null:setInterval(()=>load().catch(e=>setError(e.message)),30000);return()=>{if(timer)clearInterval(timer);};},[settings]);
+  function closeSettings(){setSettings(false);history.replaceState(null,'',location.pathname);}
+  useEffect(()=>{if(!settings)load().catch(()=>{});if(hostSession()){setAdminChecked(false);request('/api/admin/me').then(()=>setAdmin(true)).catch(()=>setAdmin(false)).finally(()=>setAdminChecked(true));}const timer=settings?null:setInterval(()=>load().catch(()=>{}),30000);return()=>{if(timer)clearInterval(timer);};},[settings]);
+  useEffect(()=>{
+    if(refreshStatus!=='done')return;
+    const timer=setTimeout(()=>setRefreshStatus(''),2000);
+    return()=>clearTimeout(timer);
+  },[refreshStatus]);
   const group=data?.groups.find(row=>row.id===groupId)||data?.groups[0];
+  const refreshing=refreshStatus==='refreshing';
+  const refreshLabel=refreshing?'正在刷新检测结果':refreshStatus==='done'?'检测结果已刷新':'刷新检测结果';
   if(settings)return <main className="ir-app"><header className="ir-header"><div><div className="ir-brand"><Settings2 size={25}/><h1>巡检设置</h1></div><p>管理员配置分组、题目、模型与巡检时间。</p></div><div className="ir-actions"><ThemeSwitch/><button onClick={closeSettings}><ArrowLeft size={16}/>返回公开页</button></div></header>{!admin?<div className="ir-empty">{!adminChecked?'正在验证管理员身份…':hostSession()?'当前账号没有巡检设置权限，请返回结果页或使用管理员账号登录。':'仅管理员可以查看巡检设置，请先登录管理员账号。'}</div>:<><ResultAccess/><AdminSettings onChange={load}/></>}</main>;
   return <main className={'ir-app ir-console'+(tab==='scheduled'?' ir-inspection-results':'')}>
     <header className="ir-header">
       <div className="ir-brand"><Activity size={23}/><h1>模型质量巡检</h1></div>
       <nav className="ir-nav" aria-label="检测入口"><button className={tab==='scheduled'?'active':''} onClick={()=>setTab('scheduled')}>定时巡检</button><button className={tab==='key'?'active':''} onClick={()=>setTab('key')}>Key 检测</button></nav>
-      <div className="ir-actions">{admin&&<button onClick={openSettings}><Settings2 size={16}/>巡检设置</button>}<ThemeSwitch/><button aria-label="刷新检测结果" onClick={()=>load().catch(e=>setError(e.message))}><RefreshCw size={17}/></button></div>
+      <div className="ir-actions">{admin&&<button onClick={openSettings}><Settings2 size={16}/>巡检设置</button>}<ThemeSwitch/>
+        <button type="button" aria-label={refreshLabel} title={refreshLabel} aria-busy={refreshing}
+          disabled={refreshing||(tab==='key'&&!hostSession())} onClick={refresh}>
+          {refreshStatus==='done'?<Check size={17} aria-hidden="true"/>:<RefreshCw size={17} className={refreshing?'spin':undefined} aria-hidden="true"/>}
+        </button>
+        <span className="ir-refresh-status" role="status">{refreshStatus&&refreshLabel}</span>
+      </div>
     </header>
-    {error&&<p role="alert" className="ir-error">{error}</p>}
-    <div className="ir-scheduled-pane" hidden={tab!=='scheduled'}>{data?(group?<ResultViewer key={group.id} group={group} stamp={data.generated_at} admin={admin} historyHours={data.history_hours} groupControls={<div className="ir-groups" aria-label="检测分组">{data.groups.map(item=><button key={item.id} aria-pressed={group.id===item.id} className={group.id===item.id?'active':''} onClick={()=>setGroupId(item.id)}>{item.name}</button>)}</div>}/>:<div className="ir-empty">还没有已配置的分组巡检。</div>):<div className="ir-empty">{error?'暂时无法查看结果，请根据上方提示重新登录或重试。':'正在加载分组…'}</div>}</div>
-    {tab==='key'&&<KeyCheck/>}
+    {(refreshError||(tab==='scheduled'&&error))&&<p role="alert" className="ir-error">{refreshError||error}</p>}
+    <div className="ir-scheduled-pane" hidden={tab!=='scheduled'}>{data?(group?<ResultViewer key={group.id} group={group} refreshRef={scheduledViewer} admin={admin} historyHours={data.history_hours} groupControls={<div className="ir-groups" aria-label="检测分组">{data.groups.map(item=><button key={item.id} aria-pressed={group.id===item.id} className={group.id===item.id?'active':''} onClick={()=>setGroupId(item.id)}>{item.name}</button>)}</div>}/>:<div className="ir-empty">还没有已配置的分组巡检。</div>):<div className="ir-empty">{error?'暂时无法查看结果，请根据上方提示重新登录或重试。':'正在加载分组…'}</div>}</div>
+    {tab==='key'&&<KeyCheck refreshRef={keyViewer}/>}
   </main>;
 }

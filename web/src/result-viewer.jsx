@@ -1,4 +1,4 @@
-import React,{useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useId,useImperativeHandle,useLayoutEffect,useRef,useState} from 'react';
 import {ChevronDown,Code2,Copy,Expand,Info,Pause,Play,X} from 'lucide-react';
 import {request} from './console-client.js';
 import {endpoint} from './endpoints.js';
@@ -57,18 +57,57 @@ export function ResultBody({record,detail,loading=false,renderUrls=null,compact=
   </div>;
 }
 
-export default function ResultViewer({group,stamp,admin=false,groupControls,historyHours}) {
-  const [rows,setRows]=useState([]),[batchId,setBatchId]=useState(''),[model,setModel]=useState(''),[topic,setTopic]=useState(''),[source,setSource]=useState(''),[recordId,setRecordId]=useState(''),[detail,setDetail]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+function useResultRequest(path,interval){
+  const [response,setResponse]=useState(null);
+  const pending=useRef(null);
+  const reload=useCallback(()=>{
+    if(!path)return;
+    if(pending.current?.path===path)return pending.current.promise;
+    const active={path};
+    pending.current=active;
+    active.promise=request(path).then(value=>{
+      if(pending.current===active)setResponse({path,value,error:''});
+    }).catch(error=>{
+      if(pending.current===active){
+        const unavailable=[401,403,404].includes(error.status);
+        setResponse(previous=>({path,value:!unavailable&&previous?.path===path?previous.value:null,error:error.message}));
+      }
+      throw error;
+    }).finally(()=>{
+      if(pending.current===active)pending.current=null;
+    });
+    return active.promise;
+  },[path]);
+  useEffect(()=>{
+    setResponse(null);
+    if(!path)return;
+    const load=()=>reload().catch(()=>{});
+    load();
+    const timer=setInterval(load,interval);
+    return()=>{
+      pending.current=null;
+      clearInterval(timer);
+    };
+  },[path,interval,reload]);
+  return [response?.path===path?response:null,reload];
+}
+
+export default function ResultViewer({group,refreshRef,admin=false,groupControls,historyHours}) {
+  const [batchId,setBatchId]=useState(''),[model,setModel]=useState(''),[topic,setTopic]=useState(''),[source,setSource]=useState(''),[recordId,setRecordId]=useState('');
   const detailPane=useRef(null);
-  useEffect(()=>{setRows([]);setBatchId('');setDetail(null);setError('');setLoading(true);},[group.id,admin]);
-  useEffect(()=>{let alive=true;request(`/api/${admin?'admin':'public'}/groups/${group.id}/history`,'GET',undefined,admin).then(value=>{if(alive){setRows(value.runs);setError('');setLoading(false);}}).catch(e=>{if(alive){setError(e.message);setLoading(false);}});return()=>{alive=false;};},[group.id,stamp,admin]);
+  const api=admin?'/api/admin':'/api/public';
+  const [history,reloadHistory]=useResultRequest(`${api}/groups/${group.id}/history`,30000);
+  const rows=history?.value?.runs??[];
   const rounds=batches(rows,topic,source),batch=rounds.find(row=>row.id===batchId)||rounds[0];
   const models=[...new Set(batch?.rows.map(row=>row.model)||[])],activeModel=models.includes(model)?model:models[0];
   const current=selectedRecord(batch,activeModel,'',recordId),samples=batch?.rows.filter(row=>row.model===activeModel)||[];
+  const [record,reloadDetail]=useResultRequest(current?`${api}/records/${current.id}`:null,300000);
+  const detail=record?.value;
+  const error=history?.error||record?.error;
+  useImperativeHandle(refreshRef,()=>({requests:()=>[reloadHistory(),reloadDetail()]}),[reloadHistory,reloadDetail]);
   useLayoutEffect(()=>{
     if(detailPane.current)detailPane.current.scrollTop=0;
   },[current?.id]);
-  useEffect(()=>{let alive=true;async function load(){if(!current)return;try{const value=await request(`/api/${admin?'admin':'public'}/records/${current.id}`);if(alive){setDetail(value);setError('');}}catch(e){if(alive){setDetail(null);setError(e.message);}}}setDetail(null);load();const timer=setInterval(load,300000);return()=>{alive=false;clearInterval(timer);};},[current?.id,admin]);
   const topics=[...new Map(rows.map(row=>[row.kind,row.title||row.kind])).entries()];
   return <section className="ir-viewer" aria-label={group.name+'检测结果'}>
     <header className="ir-viewer-head">
@@ -81,7 +120,7 @@ export default function ResultViewer({group,stamp,admin=false,groupControls,hist
       </div>
     </header>
     {error&&<p className="ir-error" role="alert">{error}</p>}
-    {loading?<div className="ir-empty">正在加载检测记录…</div>:!rounds.length?<div className="ir-empty">{rows.length?'此筛选下没有记录。':'还没有检测结果，完成巡检后会在这里展示。'}</div>:<div className="ir-reader">
+    {!history?<div className="ir-empty">正在加载检测记录…</div>:!rounds.length?<div className="ir-empty">{rows.length?'此筛选下没有记录。':'还没有检测结果，完成巡检后会在这里展示。'}</div>:<div className="ir-reader">
       <aside className="ir-timeline" aria-label="检测记录">
         <div className="ir-timeline-head"><strong>检测记录 <span>{rounds.length} 轮</span></strong><span>北京时间</span></div>
         <div className="ir-timeline-list" role="region" aria-label="检测记录列表" tabIndex={0}>
@@ -101,7 +140,7 @@ export default function ResultViewer({group,stamp,admin=false,groupControls,hist
         {current&&<>
           {admin&&current.account_id&&<div className="ir-origin"><strong>检测账号 #{current.account_id} {current.account_name}</strong></div>}
           {current.hidden_from_results&&<p className="ir-note">该账号本轮有明确答错，仅管理员可见，结果页已隐藏。</p>}
-          <ResultBody key={current.id} record={current} detail={detail} loading={!detail&&!error} renderUrls={detail?.render_urls||[]} compact/>
+          <ResultBody key={current.id} record={current} detail={detail} loading={!record} renderUrls={detail?.render_urls||[]} compact/>
         </>}
       </article>
     </div>}

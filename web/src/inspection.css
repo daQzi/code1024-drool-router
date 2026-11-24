@@ -17,6 +17,7 @@
 .ir-console .ir-nav button{font-size:14px;padding:10px 2px}
 .ir-console .ir-actions{gap:8px}
 .ir-console .ir-actions button{padding:7px 10px;font-size:13px}
+.ir-refresh-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .ir-viewer-head{position:relative;padding:10px 16px;gap:12px;flex-wrap:wrap}
 .ir-viewer-head .ir-filters{max-width:none;align-items:center;gap:8px;margin-left:auto}
 .ir-viewer-head :is(button,select){padding:7px 12px;font-size:13px}
