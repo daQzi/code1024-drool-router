@@ -1,23 +1,27 @@
-/* Palette and typography follow code1024's existing glass shell. */
+/* Palette follows code1024's Ink & Jade tokens (frontend/src/ui/tokens.css).
+   Keep these values in sync: the panel is embedded inside the main console,
+   so any divergence reads as a different product. */
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 14px; line-height: 1.6; font-synthesis: none; color-scheme: light;
-  --canvas: #d5dff2; --ink: #0b1220; --muted: #4a5b73; --accent: #0d9488;
-  --surface: rgb(255 255 255 / .64); --surface-solid: #f2f6fc;
-  --line: rgb(15 23 42 / .13); --edge: rgb(255 255 255 / .74);
-  --good: #047857; --bad: #dc2626; --warn: #a16207; --running: #2563eb;
-  --shadow: 0 8px 24px -14px rgb(15 23 42 / .18); color: var(--ink);
+  --canvas: #e6e2da; --ink: #14161a; --muted: #4d545e; --accent: #3f635a;
+  --surface: rgb(255 255 255 / .80); --surface-solid: #f7f6f3;
+  --line: rgb(20 22 26 / .16); --edge: rgb(255 255 255 / .74);
+  --good: #4a7c59; --bad: #a4433c; --warn: #96702f; --running: #47688f;
+  --shadow: 0 8px 24px -14px rgb(20 22 26 / .18); color: var(--ink);
   background: var(--canvas);
 }
 :root[data-theme="dark"] {
-  color-scheme: dark; --canvas: #101b2c; --ink: #f5f8fc; --muted: #b4c1d4;
-  --accent: #2dd4bf; --surface: rgb(34 48 70 / .78); --surface-solid: #1a2940;
-  --line: rgb(255 255 255 / .15); --edge: rgb(255 255 255 / .14);
-  --good: #34d399; --bad: #f87171; --warn: #fbbf24; --running: #60a5fa;
-  --shadow: 0 12px 28px -12px rgb(0 0 0 / .3);
+  color-scheme: dark; --canvas: #121413; --ink: #f2f3f1; --muted: #a9aeaa;
+  --accent: #9dbfb3; --surface: rgb(26 29 28 / .78); --surface-solid: #1d201f;
+  --line: rgb(255 255 255 / .16); --edge: rgb(255 255 255 / .12);
+  --good: #8fb89a; --bad: #cf8b84; --warn: #cfa96b; --running: #8aa8c6;
+  --shadow: 0 12px 28px -12px rgb(0 0 0 / .34);
 }
-body { min-width: 320px; min-height: 100vh; background: radial-gradient(ellipse at 5% 0%, #6ee7d735, transparent 55%), radial-gradient(ellipse at 95% 0%, #93c5fd40, transparent 50%); }
-:root[data-theme="dark"] body { background: radial-gradient(ellipse at 5% 0%, #14b8a615, transparent 55%); }
+/* Single-hue wash: the old teal + sky-blue pair was the same "AI template"
+   look that the main console just dropped. */
+body { min-width: 320px; min-height: 100vh; background: radial-gradient(ellipse at 5% 0%, #c6d5cd66, transparent 55%), radial-gradient(ellipse at 95% 0%, #d6ccbb59, transparent 50%); }
+:root[data-theme="dark"] body { background: radial-gradient(ellipse at 5% 0%, #1b2a2659, transparent 55%), radial-gradient(ellipse at 95% 0%, #24221d40, transparent 50%); }
 button, input, select { font: inherit; }
 button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .dashboard { max-width: 1440px; padding: 30px 32px; }
@@ -29,7 +33,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 .workspace-tabs button { color: var(--muted); padding: 10px 18px 13px; position: relative; font-weight: 550; }
 .workspace-tabs button.active { color: var(--accent); }
 .workspace-tabs button.active::after { content: ''; position: absolute; bottom: -1px; left: 18px; right: 18px; height: 2px; background: var(--accent); }
-.overview, .account, .service-panel, .quality-guide, .monitor-empty, .access-panel, .cost-summary { background: var(--surface); border: 1px solid var(--edge); border-radius: 18px; box-shadow: var(--shadow); backdrop-filter: blur(26px) saturate(160%); }
+.overview, .account, .service-panel, .quality-guide, .monitor-empty, .access-panel, .cost-summary { background: var(--surface); border: 1px solid var(--edge); border-radius: 18px; box-shadow: var(--shadow); backdrop-filter: blur(26px) saturate(115%); }
 .overview { padding: 22px 25px; min-height: 150px; }
 .overview h2 { font-size: 18px; }
 .overview-score strong { color: var(--accent); font-family: inherit; font-size: 36px; }
@@ -46,7 +50,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
 .dialog { color: var(--ink); background: var(--surface-solid); border-color: var(--line); border-radius: 20px; }
 .dialog pre, .reference pre, .prompt-text { color: var(--ink); background: color-mix(in srgb, var(--canvas) 55%, transparent); border-color: var(--line); border-radius: 10px; }
 .command { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; background: var(--accent); color: white; font-weight: 550; border: 1px solid transparent; border-radius: 10px; text-decoration: none; }
-:root[data-theme="dark"] .command { color: #04211d; }
+:root[data-theme="dark"] .command { color: #101614; }
 .command.ghost { background: var(--surface); border-color: var(--line); color: var(--ink); }
 .command:disabled { opacity: .5; }
 .service-panel, .quality-guide { padding: 26px; }

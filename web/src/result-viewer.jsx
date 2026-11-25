@@ -94,6 +94,8 @@ function useResultRequest(path,interval){
 
 export default function ResultViewer({group,refreshRef,admin=false,groupControls,historyHours}) {
   const [batchId,setBatchId]=useState(''),[model,setModel]=useState(''),[topic,setTopic]=useState(''),[source,setSource]=useState(''),[recordId,setRecordId]=useState('');
+  // 记录可能累积到几百轮，默认只渲染最近一部分，避免一次性生成过多 DOM
+  const [roundLimit,setRoundLimit]=useState(30);
   const detailPane=useRef(null);
   const api=admin?'/api/admin':'/api/public';
   const [history,reloadHistory]=useResultRequest(`${api}/groups/${group.id}/history`,30000);
@@ -101,6 +103,10 @@ export default function ResultViewer({group,refreshRef,admin=false,groupControls
   const rounds=batches(rows,topic,source),batch=rounds.find(row=>row.id===batchId)||rounds[0];
   const models=[...new Set(batch?.rows.map(row=>row.model)||[])],activeModel=models.includes(model)?model:models[0];
   const current=selectedRecord(batch,activeModel,'',recordId),samples=batch?.rows.filter(row=>row.model===activeModel)||[];
+  const activeIndex=Math.max(0,rounds.findIndex(row=>row.id===batch?.id));
+  // 选中的轮次可能落在默认窗口之外（例如筛选变化后），此时自动展开到它
+  const visibleCount=Math.min(rounds.length,Math.max(roundLimit,activeIndex+1));
+  const visibleRounds=rounds.slice(0,visibleCount);
   const [record,reloadDetail]=useResultRequest(current?`${api}/records/${current.id}`:null,300000);
   const detail=record?.value;
   const error=history?.error||record?.error;
@@ -124,10 +130,11 @@ export default function ResultViewer({group,refreshRef,admin=false,groupControls
       <aside className="ir-timeline" aria-label="检测记录">
         <div className="ir-timeline-head"><strong>检测记录 <span>{rounds.length} 轮</span></strong><span>北京时间</span></div>
         <div className="ir-timeline-list" role="region" aria-label="检测记录列表" tabIndex={0}>
-          {rounds.map((item,index)=><button key={item.id} aria-pressed={batch.id===item.id} className={'ir-round '+(batch.id===item.id?'active':'')} onClick={()=>{setBatchId(item.id);setRecordId('');}}>
+          {visibleRounds.map((item,index)=><button key={item.id} aria-pressed={batch.id===item.id} className={'ir-round '+(batch.id===item.id?'active':'')} onClick={()=>{setBatchId(item.id);setRecordId('');}}>
             <div><time>{clock(item.slot)}</time><small>{index===0?'最新一轮':sourceName(item.source)}</small></div>
             {item.rows.map(row=><div className="ir-round-line" key={row.id}><span className={'ir-dot '+row.status}/><span>{row.model}</span><b>{verdict(row)}</b><small>{row.duration??'—'}s</small></div>)}
           </button>)}
+          {visibleCount<rounds.length&&<button type="button" className="ir-round-more" onClick={()=>setRoundLimit(value=>value+50)}>加载更早的记录（还有 {rounds.length-visibleCount} 轮）</button>}
         </div>
       </aside>
       <article className="ir-result" ref={detailPane} aria-label="检测详情" tabIndex={0}>
