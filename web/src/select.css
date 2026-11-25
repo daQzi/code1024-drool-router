@@ -1,37 +1,42 @@
+/* Palette follows code1024's Ink & Jade tokens (workspace.css / inspection.css).
+   These selects sit inside those panels, so they must not keep the old
+   cool-gray + teal ramp: the mismatch is visible on every form. */
 :root {
-  --select-bg: #fff;
-  --select-border: #e5e7eb;
-  --select-popup-border: #e5e7eb;
-  --select-search-border: #f3f4f6;
-  --select-disabled-bg: #f3f4f6;
-  --select-hover-border: #d1d5db;
-  --select-text: #111827;
-  --select-option-text: #374151;
-  --select-muted: #6b7280;
-  --select-icon: #9ca3af;
-  --select-active: #f3f4f6;
-  --select-selected: #f0fdfa;
-  --select-selected-text: #0f766e;
-  --select-accent: #14b8a6;
-  --select-ring: rgb(20 184 166 / 30%);
-  --select-shadow: 0 10px 15px -3px #0002, 0 4px 6px -4px #0002;
+  --select-bg: #fbfaf8;
+  --select-border: #e0dcd4;
+  --select-popup-border: #e0dcd4;
+  --select-search-border: #eae6de;
+  --select-disabled-bg: #f4f2ee;
+  --select-hover-border: #cdc7bc;
+  --select-text: #14161a;
+  --select-option-text: #3f3c37;
+  --select-muted: #5b6675;
+  --select-icon: #8b8780;
+  --select-active: #f1efea;
+  --select-selected: #e8efec;
+  --select-selected-text: #3f635a;
+  --select-accent: #3f635a;
+  --select-ring: rgb(63 99 90 / 30%);
+  --select-shadow: 0 10px 15px -3px #0000001f, 0 4px 6px -4px #0000001a;
 }
 
 :root[data-theme=dark] {
-  --select-bg: #1e293b;
-  --select-border: #475569;
-  --select-popup-border: #334155;
-  --select-search-border: #334155;
-  --select-disabled-bg: #0f172a;
-  --select-hover-border: #64748b;
-  --select-text: #f3f4f6;
-  --select-option-text: #d1d5db;
-  --select-muted: #94a3b8;
-  --select-icon: #94a3b8;
-  --select-active: #334155;
-  --select-selected: rgb(19 78 74 / 20%);
-  --select-selected-text: #5eead4;
-  --select-shadow: 0 10px 15px -3px #0005, 0 4px 6px -4px #0005;
+  --select-bg: #1d201f;
+  --select-border: #3a3e3a;
+  --select-popup-border: #33372f;
+  --select-search-border: #2b2f2c;
+  --select-disabled-bg: #171a18;
+  --select-hover-border: #4f544f;
+  --select-text: #f2f3f1;
+  --select-option-text: #d8dad6;
+  --select-muted: #a9aeaa;
+  --select-icon: #8c938e;
+  --select-active: #2b302d;
+  --select-selected: rgb(63 99 90 / 26%);
+  --select-selected-text: #9dbfb3;
+  --select-accent: #9dbfb3;
+  --select-ring: rgb(157 191 179 / 28%);
+  --select-shadow: 0 10px 15px -3px #00000059, 0 4px 6px -4px #0000004d;
 }
 
 .quality-select { min-width: 0; max-width: 100%; }
